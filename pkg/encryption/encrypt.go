@@ -68,7 +68,7 @@ func EncryptBlob(data []byte, publicKey *rsa.PublicKey) ([]byte, error) {
 
 	// Encrypt data
 	ciphertext := gcm.Seal(nil, nonce, data, nil)
-	if ciphertext == nil {
+	if ciphertext == nil || len(ciphertext) == 0 {
 		return nil, errors.New("encryption failed")
 	}
 
