@@ -31,13 +31,13 @@ jobs:
 
     - name: Check test coverage
       run: |
-        COVERAGE=$(go tool cover -func=coverage.txt | grep total | awk '{print $3}' | sed 's/%//')
+        COVERAGE=$(go tool cover -func=coverage.txt | grep total | awk '{print $3}' | sed 's/[^0-9.]//g')
         echo "Total coverage: $COVERAGE%"
-        if [ "$(echo "$COVERAGE < 90" | bc)" -eq 1 ]; then
+        if awk "BEGIN {exit !($COVERAGE >= 90)}"; then
+          echo "Test coverage is above 90%"
+        else
           echo "Test coverage is below 90%"
           exit 1
-        else
-          echo "Test coverage is above 90%"
         fi
 
     - name: Upload coverage to Codecov
@@ -47,3 +47,4 @@ jobs:
         flags: unittests
         name: codecov-umbrella
         fail_ci_if_error: true
+        token: ${{ secrets.CODECOV_TOKEN }}
