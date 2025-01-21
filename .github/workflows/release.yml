@@ -28,9 +28,9 @@ jobs:
 
     - name: Check test coverage
       run: |
-        COVERAGE=$(go tool cover -func=coverage.txt | grep total | awk '{print substr($3, 1, length($3)-1)}')
+        COVERAGE=$(go tool cover -func=coverage.txt | grep total | awk '{print $3}' | sed 's/%//')
         echo "Total coverage: $COVERAGE%"
-        if (( $(echo "$COVERAGE < 90" | bc -l) )); then
+        if (( $(echo "$COVERAGE < 90" | awk '{print ($1 < $2)}') )); then
           echo "Test coverage is below 90%"
           exit 1
         fi
