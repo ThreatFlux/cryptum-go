@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/threatflux/cryptum-go/internal/logger"
+	"github.com/threatflux/cryptum-go/internal/testutil"
 	"github.com/threatflux/cryptum-go/pkg/encryption"
 )
 
@@ -17,10 +18,7 @@ var testExitCalled bool
 
 func setupTest(t *testing.T) (string, *bytes.Buffer, func()) {
 	// Create temporary directory
-	tmpDir, err := os.MkdirTemp("", "cryptum-main-*")
-	if err != nil {
-		t.Fatal(err)
-	}
+	tmpDir, cleanup := testutil.SetupTestDir(t, "cryptum-main-*")
 
 	// Change to temp directory
 	origWd, err := os.Getwd()
@@ -49,15 +47,15 @@ func setupTest(t *testing.T) (string, *bytes.Buffer, func()) {
 	flag.CommandLine = flag.NewFlagSet(os.Args[0], flag.ContinueOnError)
 	flag.CommandLine.SetOutput(io.Discard)
 
-	cleanup := func() {
+	cleanupAll := func() {
 		os.Chdir(origWd)
-		os.RemoveAll(tmpDir)
+		cleanup()
 		os.Args = origArgs
 		logger.ExitFunc = oldExitFunc
 		logger.ResetInstance()
 	}
 
-	return tmpDir, &logBuf, cleanup
+	return tmpDir, &logBuf, cleanupAll
 }
 
 func TestMainIntegration_Generate(t *testing.T) {
@@ -92,12 +90,9 @@ func TestMainIntegration_Encrypt(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(tmpDir, "test.pub"), []byte(pubKey), 0644); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(tmpDir, "test.txt"), []byte("test data"), 0644); err != nil {
-		t.Fatal(err)
-	}
+
+	testutil.CreateTestFile(t, tmpDir, "test.pub", pubKey)
+	testutil.CreateTestFile(t, tmpDir, "test.txt", testutil.TestData.ShortMessage)
 
 	os.Args = []string{"cryptum", "-encrypt", "-public-key", "test.pub", "-input", "test.txt", "-output", "test.enc"}
 
@@ -184,42 +179,21 @@ func TestMainIntegration_StdinStdout(t *testing.T) {
 	keyPrefix := filepath.Join(tmpDir, "test_keys")
 	runCryptum(true, false, false, "", "", "", keyPrefix, false)
 
-	// Set up stdin with test data
-	oldStdin := os.Stdin
-	oldStdout := os.Stdout
-	defer func() {
-		os.Stdin = oldStdin
-		os.Stdout = oldStdout
-	}()
-
-	// Create pipes for stdin and stdout
-	r, w, err := os.Pipe()
-	if err != nil {
-		t.Fatal(err)
-	}
-	os.Stdin = r
-
-	outR, outW, err := os.Pipe()
-	if err != nil {
-		t.Fatal(err)
-	}
-	os.Stdout = outW
+	// Set up stdin/stdout
+	stdin, stdout, cleanupIO := testutil.SetupStdinStdout(t)
+	defer cleanupIO()
 
 	// Write test data to stdin
-	testData := "test data for stdin"
 	go func() {
-		w.Write([]byte(testData))
-		w.Close()
+		stdin.Write([]byte(testutil.TestData.ShortMessage))
+		stdin.Close()
 	}()
 
 	// Run encryption with stdin/stdout
 	runCryptum(false, true, false, keyPrefix+".public", "", "-", "-", false)
 
-	// Close write end of stdout pipe
-	outW.Close()
-
 	// Read encrypted output
-	encryptedData, err := io.ReadAll(outR)
+	encryptedData, err := io.ReadAll(stdout)
 	if err != nil {
 		t.Fatal(err)
 	}

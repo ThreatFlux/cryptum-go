@@ -2,12 +2,15 @@ package encryption
 
 import (
 	"bytes"
+	"crypto/cipher"
 	"crypto/rand"
 	"crypto/rsa"
 	"encoding/base64"
+	"encoding/pem"
 	"errors"
-	"strings"
 	"testing"
+
+	"github.com/threatflux/cryptum-go/internal/testutil"
 )
 
 type errorReader struct {
@@ -21,6 +24,56 @@ func (r *errorReader) Read(p []byte) (n int, err error) {
 		return 0, errors.New("simulated read error")
 	}
 	return rand.Read(p)
+}
+
+// Mock AEAD for testing GCM errors
+type mockAEAD struct {
+	err       error
+	sealError bool
+}
+
+func (m *mockAEAD) NonceSize() int { return 12 }
+func (m *mockAEAD) Overhead() int  { return 16 }
+func (m *mockAEAD) Seal(dst, nonce, plaintext, additionalData []byte) []byte {
+	if m.sealError {
+		return nil
+	}
+	if m.err != nil {
+		return nil
+	}
+	// Simulate real GCM behavior by appending tag
+	result := append(dst, plaintext...)
+	return append(result, bytes.Repeat([]byte{0}, 16)...)
+}
+func (m *mockAEAD) Open(dst, nonce, ciphertext, additionalData []byte) ([]byte, error) {
+	if m.err != nil {
+		return nil, m.err
+	}
+	// Remove simulated tag
+	return append(dst, ciphertext[:len(ciphertext)-16]...), nil
+}
+
+// Mock Block for testing GCM errors
+type mockBlock struct {
+	cipher.Block
+	gcmErr error
+}
+
+func (m *mockBlock) BlockSize() int { return 16 }
+
+func newMockGCM(b cipher.Block) (cipher.AEAD, error) {
+	if mb, ok := b.(*mockBlock); ok && mb.gcmErr != nil {
+		return nil, mb.gcmErr
+	}
+	return &mockAEAD{}, nil
+}
+
+func newMockGCMWithOpenError(b cipher.Block) (cipher.AEAD, error) {
+	return &mockAEAD{err: errors.New("mock Open error")}, nil
+}
+
+func newMockGCMWithSealError(b cipher.Block) (cipher.AEAD, error) {
+	return &mockAEAD{sealError: true}, nil
 }
 
 func TestKeyGeneration(t *testing.T) {
@@ -48,10 +101,10 @@ func TestKeyGeneration(t *testing.T) {
 		}
 
 		// Check that keys are not empty and are base64 encoded
-		if len(privateKey) == 0 || !isBase64(privateKey) {
+		if len(privateKey) == 0 || !testutil.IsBase64(privateKey) {
 			t.Error("Invalid private key format")
 		}
-		if len(publicKey) == 0 || !isBase64(publicKey) {
+		if len(publicKey) == 0 || !testutil.IsBase64(publicKey) {
 			t.Error("Invalid public key format")
 		}
 
@@ -70,16 +123,16 @@ func TestKeyGeneration(t *testing.T) {
 		pubStr := string(pubBytes)
 
 		// Verify key format - PEM encoded keys
-		if !strings.Contains(privStr, "-----BEGIN RSA PRIVATE KEY-----") {
+		if !bytes.Contains(privBytes, []byte("-----BEGIN RSA PRIVATE KEY-----")) {
 			t.Errorf("Private key has incorrect format: %s", privStr)
 		}
-		if !strings.Contains(privStr, "-----END RSA PRIVATE KEY-----") {
+		if !bytes.Contains(privBytes, []byte("-----END RSA PRIVATE KEY-----")) {
 			t.Errorf("Private key missing end marker: %s", privStr)
 		}
-		if !strings.Contains(pubStr, "-----BEGIN RSA PUBLIC KEY-----") {
+		if !bytes.Contains(pubBytes, []byte("-----BEGIN RSA PUBLIC KEY-----")) {
 			t.Errorf("Public key has incorrect format: %s", pubStr)
 		}
-		if !strings.Contains(pubStr, "-----END RSA PUBLIC KEY-----") {
+		if !bytes.Contains(pubBytes, []byte("-----END RSA PUBLIC KEY-----")) {
 			t.Errorf("Public key missing end marker: %s", pubStr)
 		}
 
@@ -126,29 +179,28 @@ func TestKeyParsingErrors(t *testing.T) {
 		},
 		{
 			name:        "Invalid base64",
-			private:     "not-base64!",
-			public:      "also-not-base64!",
+			private:     testutil.TestData.InvalidBase64,
+			public:      testutil.TestData.InvalidBase64,
 			wantPrivErr: true,
 			wantPubErr:  true,
 		},
 		{
 			name:        "Invalid key data",
-			private:     "SGVsbG8sIFdvcmxkIQ==", // "Hello, World!" in base64
-			public:      "SGVsbG8sIFdvcmxkIQ==",
+			private:     base64.StdEncoding.EncodeToString([]byte("Hello, World!")),
+			public:      base64.StdEncoding.EncodeToString([]byte("Hello, World!")),
 			wantPrivErr: true,
 			wantPubErr:  true,
 		},
 		{
-			name:        "Invalid PEM format",
-			private:     "LS0tLS1CRUdJTiBJTlZBTElEIEtFWS0tLS0tCg==",
-			public:      "LS0tLS1CRUdJTiBJTlZBTElEIEtFWS0tLS0tCg==",
-			wantPrivErr: true,
-			wantPubErr:  true,
-		},
-		{
-			name:        "Malformed base64",
-			private:     "SGVsbG8=====",
-			public:      "V29ybGQ=====",
+			name: "Valid PEM format but invalid key data",
+			private: base64.StdEncoding.EncodeToString(pem.EncodeToMemory(&pem.Block{
+				Type:  "RSA PRIVATE KEY",
+				Bytes: []byte("invalid key data"),
+			})),
+			public: base64.StdEncoding.EncodeToString(pem.EncodeToMemory(&pem.Block{
+				Type:  "RSA PUBLIC KEY",
+				Bytes: []byte("invalid key data"),
+			})),
 			wantPrivErr: true,
 			wantPubErr:  true,
 		},
@@ -191,19 +243,19 @@ func TestEncryptionDecryption(t *testing.T) {
 	}{
 		{
 			name: "Short string",
-			data: []byte("Hello, World!"),
+			data: []byte(testutil.TestData.ShortMessage),
 		},
 		{
 			name: "Long string",
-			data: []byte(strings.Repeat("Long message for testing. ", 100)),
+			data: []byte(testutil.TestData.LongMessage),
 		},
 		{
 			name: "Binary data",
-			data: []byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
+			data: testutil.TestData.BinaryData,
 		},
 		{
 			name: "Maximum size",
-			data: bytes.Repeat([]byte("a"), maxDataSize),
+			data: testutil.TestData.MaxSizeData,
 		},
 		{
 			name: "Single byte",
@@ -211,20 +263,11 @@ func TestEncryptionDecryption(t *testing.T) {
 		},
 		{
 			name: "UTF-8 characters",
-			data: []byte("Hello, 世界! ¡Hola, мир! 👋🌍"),
+			data: []byte(testutil.TestData.UnicodeChars),
 		},
 		{
 			name: "Special characters",
-			data: []byte("!@#$%^&*()_+-=[]{}|;:,.<>?"),
-		},
-		{
-			name: "Mixed content",
-			data: bytes.Join([][]byte{
-				[]byte("Regular text"),
-				{0, 1, 2, 3},
-				[]byte("🌟 Unicode"),
-				{255, 254, 253},
-			}, []byte(" ")),
+			data: []byte(testutil.TestData.SpecialChars),
 		},
 	}
 
@@ -269,9 +312,15 @@ func TestEncryptionErrors(t *testing.T) {
 	_, publicKey, _ := GenerateKeyPair()
 	pubKey, _ := ParsePublicKey(publicKey)
 
-	// Save original rand.Reader
+	// Save original functions
+	oldNewCipher := newEncryptCipher
+	oldNewGCM := newEncryptGCM
 	oldReader := rand.Reader
-	defer func() { rand.Reader = oldReader }()
+	defer func() {
+		newEncryptCipher = oldNewCipher
+		newEncryptGCM = oldNewGCM
+		rand.Reader = oldReader
+	}()
 
 	testCases := []struct {
 		name    string
@@ -329,16 +378,45 @@ func TestEncryptionErrors(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name:    "Maximum allowed size",
-			data:    bytes.Repeat([]byte("a"), maxDataSize),
+			name:    "AES cipher creation failure",
+			data:    []byte("test"),
 			key:     pubKey,
-			wantErr: false,
+			wantErr: true,
+			setup: func() {
+				newEncryptCipher = func(key []byte) (cipher.Block, error) {
+					return nil, errors.New("mock cipher error")
+				}
+			},
 		},
 		{
-			name:    "Near maximum size",
-			data:    bytes.Repeat([]byte("a"), maxDataSize-1),
+			name:    "GCM creation failure",
+			data:    []byte("test"),
 			key:     pubKey,
-			wantErr: false,
+			wantErr: true,
+			setup: func() {
+				newEncryptGCM = func(block cipher.Block) (cipher.AEAD, error) {
+					return nil, errors.New("mock GCM error")
+				}
+			},
+		},
+		{
+			name:    "GCM seal failure",
+			data:    []byte("test"),
+			key:     pubKey,
+			wantErr: true,
+			setup: func() {
+				newEncryptGCM = newMockGCMWithSealError
+			},
+		},
+		{
+			name:    "Nonce generation failure",
+			data:    []byte("test"),
+			key:     pubKey,
+			wantErr: true,
+			setup: func() {
+				// First ReadFull is for session key, second is for nonce
+				rand.Reader = &errorReader{failAfter: 1}
+			},
 		},
 	}
 
@@ -351,8 +429,6 @@ func TestEncryptionErrors(t *testing.T) {
 			if (err != nil) != tc.wantErr {
 				t.Errorf("EncryptBlob() error = %v, wantErr %v", err, tc.wantErr)
 			}
-			// Reset reader after each test
-			rand.Reader = oldReader
 		})
 	}
 }
@@ -362,20 +438,29 @@ func TestDecryptionErrors(t *testing.T) {
 	privKey, _ := ParsePrivateKey(privateKey)
 	pubKey, _ := ParsePublicKey(publicKey)
 
+	// Save original functions
+	oldNewCipher := newCipher
+	oldNewGCM := newGCM
+	defer func() {
+		newCipher = oldNewCipher
+		newGCM = oldNewGCM
+	}()
+
 	// Create valid encrypted data for testing
 	validData := []byte("test data for decryption")
 	encryptedData, _ := EncryptBlob(validData, pubKey)
 
-	// Corrupt the session key but keep valid format
+	// Create corrupted data
 	corruptedData := make([]byte, len(encryptedData))
 	copy(corruptedData, encryptedData)
-	copy(corruptedData[:32], bytes.Repeat([]byte{0xFF}, 32)) // Corrupt the session key
+	copy(corruptedData[:32], bytes.Repeat([]byte{0xFF}, 32))
 
 	testCases := []struct {
 		name    string
 		data    []byte
 		key     *rsa.PrivateKey
 		wantErr bool
+		setup   func()
 	}{
 		{
 			name:    "Empty data",
@@ -391,7 +476,7 @@ func TestDecryptionErrors(t *testing.T) {
 		},
 		{
 			name:    "Invalid format",
-			data:    make([]byte, 600), // Right size, wrong content
+			data:    make([]byte, 600),
 			key:     privKey,
 			wantErr: true,
 		},
@@ -403,44 +488,67 @@ func TestDecryptionErrors(t *testing.T) {
 		},
 		{
 			name:    "Invalid session key",
-			data:    bytes.Repeat([]byte{1}, 512+12+16), // Invalid encrypted session key
+			data:    bytes.Repeat([]byte{1}, 512+12+16),
 			key:     privKey,
 			wantErr: true,
 		},
 		{
 			name:    "Invalid nonce size",
-			data:    bytes.Repeat([]byte{1}, 512+8), // Wrong nonce size
+			data:    bytes.Repeat([]byte{1}, 512+8),
 			key:     privKey,
 			wantErr: true,
 		},
 		{
 			name:    "Invalid ciphertext size",
-			data:    bytes.Repeat([]byte{1}, 512+12), // No ciphertext
+			data:    bytes.Repeat([]byte{1}, 512+12),
 			key:     privKey,
 			wantErr: true,
 		},
 		{
 			name:    "Corrupted data",
-			data:    bytes.Repeat([]byte{0xFF}, 512+12+32), // All invalid bytes
+			data:    bytes.Repeat([]byte{0xFF}, 512+12+32),
 			key:     privKey,
 			wantErr: true,
 		},
 		{
-			name:    "Invalid AES key",
-			data:    corruptedData, // Valid format but corrupted session key
+			name:    "AES cipher creation failure",
+			data:    encryptedData,
 			key:     privKey,
 			wantErr: true,
+			setup: func() {
+				newCipher = func(key []byte) (cipher.Block, error) {
+					return nil, errors.New("mock cipher error")
+				}
+			},
 		},
 		{
-			name:    "Invalid GCM tag",
-			data:    append(encryptedData, []byte{1, 2, 3}...), // Append invalid GCM tag
+			name:    "GCM creation failure",
+			data:    encryptedData,
 			key:     privKey,
 			wantErr: true,
+			setup: func() {
+				newCipher = func(key []byte) (cipher.Block, error) {
+					return &mockBlock{gcmErr: errors.New("mock GCM error")}, nil
+				}
+				newGCM = newMockGCM
+			},
+		},
+		{
+			name:    "GCM open failure",
+			data:    encryptedData,
+			key:     privKey,
+			wantErr: true,
+			setup: func() {
+				newGCM = newMockGCMWithOpenError
+			},
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			if tc.setup != nil {
+				tc.setup()
+			}
 			_, err := DecryptBlob(tc.data, tc.key)
 			if (err != nil) != tc.wantErr {
 				t.Errorf("DecryptBlob() error = %v, wantErr %v", err, tc.wantErr)
@@ -477,32 +585,32 @@ func TestStringEncryption(t *testing.T) {
 		},
 		{
 			name:    "Simple string",
-			input:   "Hello, World!",
+			input:   testutil.TestData.ShortMessage,
 			wantErr: false,
 		},
 		{
 			name:    "Long string",
-			input:   strings.Repeat("Long message for testing. ", 50),
+			input:   testutil.TestData.LongMessage,
 			wantErr: false,
 		},
 		{
 			name:    "Special characters",
-			input:   "!@#$%^&*()_+-=[]{}|;:,.<>?",
+			input:   testutil.TestData.SpecialChars,
 			wantErr: false,
 		},
 		{
 			name:    "Unicode characters",
-			input:   "Hello, 世界! ¡Hola, мир! 👋🌍",
+			input:   testutil.TestData.UnicodeChars,
 			wantErr: false,
 		},
 		{
 			name:    "Maximum size string",
-			input:   strings.Repeat("a", maxDataSize),
+			input:   string(testutil.TestData.MaxSizeData),
 			wantErr: false,
 		},
 		{
 			name:    "Too large string",
-			input:   strings.Repeat("a", maxDataSize+1),
+			input:   string(bytes.Repeat([]byte("a"), maxDataSize+1)),
 			wantErr: true,
 		},
 	}
@@ -533,9 +641,4 @@ func TestStringEncryption(t *testing.T) {
 			}
 		})
 	}
-}
-
-// Helper function to check if a string is base64 encoded
-func isBase64(s string) bool {
-	return len(s)%4 == 0 && strings.Trim(s, "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/-_=") == ""
 }

@@ -2,21 +2,18 @@ package e2e
 
 import (
 	"bytes"
-	"encoding/base64"
-	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/threatflux/cryptum-go/internal/testutil"
 )
 
 func TestCLIEndToEnd(t *testing.T) {
 	// Create temporary directory for test files
-	tmpDir, err := os.MkdirTemp("", "cryptum-e2e-*")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(tmpDir)
+	tmpDir, cleanup := testutil.SetupTestDir(t, "cryptum-e2e-*")
+	defer cleanup()
 
 	// Build the CLI tool
 	buildCmd := exec.Command("go", "build", "-o", filepath.Join(tmpDir, "cryptum"), "../../cmd/cryptum")
@@ -51,19 +48,13 @@ func testKeyGeneration(t *testing.T, cryptumBin, tmpDir string) {
 	}
 
 	// Verify key files exist and are base64 encoded
-	privateKey, err := os.ReadFile(keyPrefix + ".private")
-	if err != nil {
-		t.Fatal("Failed to read private key:", err)
-	}
-	if !isBase64(string(privateKey)) {
+	privateKey := testutil.CreateTestFile(t, tmpDir, "test_keys.private", "")
+	if !testutil.IsBase64(string(privateKey)) {
 		t.Error("Private key is not base64 encoded")
 	}
 
-	publicKey, err := os.ReadFile(keyPrefix + ".public")
-	if err != nil {
-		t.Fatal("Failed to read public key:", err)
-	}
-	if !isBase64(string(publicKey)) {
+	publicKey := testutil.CreateTestFile(t, tmpDir, "test_keys.public", "")
+	if !testutil.IsBase64(string(publicKey)) {
 		t.Error("Public key is not base64 encoded")
 	}
 }
@@ -74,11 +65,7 @@ func testEncryptDecryptFile(t *testing.T, cryptumBin, tmpDir string) {
 	exec.Command(cryptumBin, "-generate", "-output", keyPrefix).Run()
 
 	// Create test message
-	message := "Hello, this is a test message!"
-	messageFile := filepath.Join(tmpDir, "message.txt")
-	if err := os.WriteFile(messageFile, []byte(message), 0644); err != nil {
-		t.Fatal(err)
-	}
+	messageFile := testutil.CreateTestFile(t, tmpDir, "message.txt", testutil.TestData.ShortMessage)
 
 	// Encrypt
 	encryptedFile := filepath.Join(tmpDir, "encrypted.txt")
@@ -105,12 +92,10 @@ func testEncryptDecryptFile(t *testing.T, cryptumBin, tmpDir string) {
 	}
 
 	// Verify
-	decrypted, err := os.ReadFile(decryptedFile)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if string(decrypted) != message {
-		t.Errorf("Decrypted message does not match original.\nWant: %q\nGot: %q", message, string(decrypted))
+	decrypted := testutil.CreateTestFile(t, tmpDir, "decrypted.txt", "")
+	if string(decrypted) != testutil.TestData.ShortMessage {
+		t.Errorf("Decrypted message does not match original.\nWant: %q\nGot: %q",
+			testutil.TestData.ShortMessage, string(decrypted))
 	}
 }
 
@@ -119,7 +104,6 @@ func testEncryptDecryptStdin(t *testing.T, cryptumBin, tmpDir string) {
 	keyPrefix := filepath.Join(tmpDir, "stdin_keys")
 	exec.Command(cryptumBin, "-generate", "-output", keyPrefix).Run()
 
-	message := "Test message via stdin"
 	var encryptedOutput bytes.Buffer
 
 	// Encrypt via stdin
@@ -129,7 +113,7 @@ func testEncryptDecryptStdin(t *testing.T, cryptumBin, tmpDir string) {
 		"-input", "-",
 		"-output", "-",
 	)
-	encryptCmd.Stdin = strings.NewReader(message)
+	encryptCmd.Stdin = strings.NewReader(testutil.TestData.ShortMessage)
 	encryptCmd.Stdout = &encryptedOutput
 	if err := encryptCmd.Run(); err != nil {
 		t.Fatal("Encryption failed:", err)
@@ -150,9 +134,9 @@ func testEncryptDecryptStdin(t *testing.T, cryptumBin, tmpDir string) {
 		t.Fatal("Decryption failed:", err)
 	}
 
-	if decryptedOutput.String() != message {
+	if decryptedOutput.String() != testutil.TestData.ShortMessage {
 		t.Errorf("Decrypted message does not match original.\nWant: %q\nGot: %q",
-			message, decryptedOutput.String())
+			testutil.TestData.ShortMessage, decryptedOutput.String())
 	}
 }
 
@@ -193,9 +177,4 @@ func testInvalidInputs(t *testing.T, cryptumBin, tmpDir string) {
 			}
 		})
 	}
-}
-
-func isBase64(s string) bool {
-	_, err := base64.StdEncoding.DecodeString(strings.TrimSpace(s))
-	return err == nil
 }

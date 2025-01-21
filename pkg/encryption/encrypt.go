@@ -15,6 +15,12 @@ import (
 // to encrypt the actual data. The result format is compatible with the Python cryptum library.
 const maxDataSize = 1024 * 512 // 512KB max size
 
+// For testing purposes
+var (
+	newEncryptCipher = aes.NewCipher
+	newEncryptGCM    = cipher.NewGCM
+)
+
 func EncryptBlob(data []byte, publicKey *rsa.PublicKey) ([]byte, error) {
 	if publicKey == nil {
 		return nil, errors.New("public key is required")
@@ -43,13 +49,13 @@ func EncryptBlob(data []byte, publicKey *rsa.PublicKey) ([]byte, error) {
 	}
 
 	// Create AES cipher
-	block, err := aes.NewCipher(sessionKey)
+	block, err := newEncryptCipher(sessionKey)
 	if err != nil {
 		return nil, err
 	}
 
 	// Create GCM mode
-	gcm, err := cipher.NewGCM(block)
+	gcm, err := newEncryptGCM(block)
 	if err != nil {
 		return nil, err
 	}
@@ -62,6 +68,9 @@ func EncryptBlob(data []byte, publicKey *rsa.PublicKey) ([]byte, error) {
 
 	// Encrypt data
 	ciphertext := gcm.Seal(nil, nonce, data, nil)
+	if ciphertext == nil {
+		return nil, errors.New("encryption failed")
+	}
 
 	// Format: [encrypted_session_key(512)][nonce(12)][ciphertext][tag(16)]
 	// This matches the Python cryptum format

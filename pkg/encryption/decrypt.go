@@ -15,6 +15,12 @@ var (
 	ErrDecryptionFailed = errors.New("decryption failed")
 )
 
+// For testing purposes
+var (
+	newCipher = aes.NewCipher
+	newGCM    = cipher.NewGCM
+)
+
 // DecryptBlob decrypts data that was encrypted using hybrid RSA+AES encryption.
 // The data format must match the Python cryptum library:
 // [encrypted_session_key(512)][nonce(12)][ciphertext][tag(16)]
@@ -39,13 +45,13 @@ func DecryptBlob(encryptedData []byte, privateKey *rsa.PrivateKey) ([]byte, erro
 	}
 
 	// Create AES cipher
-	block, err := aes.NewCipher(sessionKey)
+	block, err := newCipher(sessionKey)
 	if err != nil {
 		return nil, err
 	}
 
 	// Create GCM mode
-	gcm, err := cipher.NewGCM(block)
+	gcm, err := newGCM(block)
 	if err != nil {
 		return nil, err
 	}

@@ -5,6 +5,7 @@
 [![codecov](https://codecov.io/gh/threatflux/cryptum-go/branch/main/graph/badge.svg)](https://codecov.io/gh/threatflux/cryptum-go)
 [![Go Report Card](https://goreportcard.com/badge/github.com/threatflux/cryptum-go)](https://goreportcard.com/report/github.com/threatflux/cryptum-go)
 [![GoDoc](https://godoc.org/github.com/threatflux/cryptum-go?status.svg)](https://godoc.org/github.com/threatflux/cryptum-go)
+[![Codacy Badge](https://app.codacy.com/project/badge/Grade/60aed15ad2bb4d598dcc009db4966646)](https://app.codacy.com/gh/ThreatFlux/cryptum-go/dashboard?utm_source=gh&utm_medium=referral&utm_content=&utm_campaign=Badge_grade)
 
 A robust Go implementation of the Cryptum encryption framework, providing secure hybrid encryption capabilities using RSA and AES. This project maintains compatibility with the Python cryptum library while leveraging Go's strong cryptographic primitives.
 
