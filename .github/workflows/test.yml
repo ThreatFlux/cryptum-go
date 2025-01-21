@@ -32,11 +32,14 @@ jobs:
     - name: Check test coverage
       run: |
         COVERAGE=$(go tool cover -func=coverage.txt | grep total | awk '{print $3}' | sed 's/[^0-9.]//g')
+        MIN_COVERAGE=90
         echo "Total coverage: $COVERAGE%"
-        if awk "BEGIN {exit !($COVERAGE >= 90)}"; then
-          echo "Test coverage is above 90%"
+        echo "Required coverage: $MIN_COVERAGE%"
+        
+        if [ $(echo "$COVERAGE > $MIN_COVERAGE" | bc) -eq 1 ]; then
+          echo "✅ Test coverage is above $MIN_COVERAGE%"
         else
-          echo "Test coverage is below 90%"
+          echo "❌ Test coverage is below $MIN_COVERAGE%"
           exit 1
         fi
 
