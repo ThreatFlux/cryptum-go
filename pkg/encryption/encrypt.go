@@ -13,9 +13,20 @@ import (
 // EncryptBlob encrypts data using hybrid RSA+AES encryption.
 // The function uses RSA to encrypt an AES session key, then uses AES-GCM
 // to encrypt the actual data. The result format is compatible with the Python cryptum library.
+const maxDataSize = 1024 * 512 // 512KB max size
+
 func EncryptBlob(data []byte, publicKey *rsa.PublicKey) ([]byte, error) {
 	if publicKey == nil {
 		return nil, errors.New("public key is required")
+	}
+	if data == nil {
+		return nil, errors.New("data is required")
+	}
+	if len(data) == 0 {
+		return nil, errors.New("data cannot be empty")
+	}
+	if len(data) > maxDataSize {
+		return nil, errors.New("data too large")
 	}
 
 	// Generate random AES session key

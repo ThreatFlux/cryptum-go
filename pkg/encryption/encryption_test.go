@@ -60,10 +60,6 @@ func TestEncryptionDecryption(t *testing.T) {
 		data []byte
 	}{
 		{
-			name: "Empty string",
-			data: []byte(""),
-		},
-		{
 			name: "Short string",
 			data: []byte("Hello, World!"),
 		},
@@ -118,7 +114,7 @@ func TestEncryptionErrors(t *testing.T) {
 			name:    "Nil data",
 			data:    nil,
 			key:     pubKey,
-			wantErr: false, // nil data is valid, just encrypts empty bytes
+			wantErr: true, // nil data should be rejected
 		},
 		{
 			name:    "Nil key",
@@ -149,28 +145,60 @@ func TestDecryptionErrors(t *testing.T) {
 	privKey, _ := ParsePrivateKey(privateKey)
 
 	testCases := []struct {
-		name string
-		data []byte
+		name    string
+		data    []byte
+		key     *rsa.PrivateKey
+		wantErr bool
 	}{
 		{
-			name: "Empty data",
-			data: []byte{},
+			name:    "Empty data",
+			data:    []byte{},
+			key:     privKey,
+			wantErr: true,
 		},
 		{
-			name: "Short data",
-			data: []byte("too short"),
+			name:    "Short data",
+			data:    []byte("too short"),
+			key:     privKey,
+			wantErr: true,
 		},
 		{
-			name: "Invalid format",
-			data: make([]byte, 600), // Right size, wrong content
+			name:    "Invalid format",
+			data:    make([]byte, 600), // Right size, wrong content
+			key:     privKey,
+			wantErr: true,
+		},
+		{
+			name:    "Nil key",
+			data:    make([]byte, 600),
+			key:     nil,
+			wantErr: true,
+		},
+		{
+			name:    "Invalid session key",
+			data:    make([]byte, 1024), // Large enough for session key
+			key:     privKey,
+			wantErr: true,
+		},
+		{
+			name:    "Invalid nonce size",
+			data:    bytes.Repeat([]byte{1}, 512+8), // Wrong nonce size
+			key:     privKey,
+			wantErr: true,
+		},
+		{
+			name:    "Invalid ciphertext size",
+			data:    bytes.Repeat([]byte{1}, 512+12), // No ciphertext
+			key:     privKey,
+			wantErr: true,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			_, err := DecryptBlob(tc.data, privKey)
-			if err == nil {
-				t.Error("Expected error for invalid data")
+			_, err := DecryptBlob(tc.data, tc.key)
+			if (err != nil) != tc.wantErr {
+				t.Errorf("DecryptBlob() error = %v, wantErr %v", err, tc.wantErr)
 			}
 		})
 	}

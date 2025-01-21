@@ -3,6 +3,7 @@ package logger
 
 import (
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"sync"
@@ -28,6 +29,13 @@ const (
 type Logger struct {
 	*log.Logger
 	level Level
+	out   io.Writer
+}
+
+// SetOutput sets the output writer for the logger
+func (l *Logger) SetOutput(w io.Writer) {
+	l.out = w
+	l.Logger = log.New(w, "", 0) // Reset logger with no timestamp prefix
 }
 
 var (
@@ -57,9 +65,16 @@ func GetInstance() *Logger {
 		instance = &Logger{
 			Logger: log.New(os.Stderr, "", log.LstdFlags),
 			level:  INFO,
+			out:    os.Stderr,
 		}
 	})
 	return instance
+}
+
+// ResetInstance resets the logger instance (useful for testing)
+func ResetInstance() {
+	instance = nil
+	once = sync.Once{}
 }
 
 // SetLevel sets the logging level
@@ -88,18 +103,23 @@ func (l *Logger) Warn(msg string, fields ...Field) {
 	}
 }
 
-// Error logs an error message with optional fields
+// Error logs an error message with optional fields and exits
 func (l *Logger) Error(msg string, fields ...Field) {
 	if l.level <= ERROR {
 		l.log("ERROR", msg, fields...)
+		ExitFunc(1)
 	}
 }
+
+// ExitFunc is the function called by Fatal. It's os.Exit by default but can be
+// overridden in tests.
+var ExitFunc = os.Exit
 
 // Fatal logs a fatal message with optional fields and exits
 func (l *Logger) Fatal(msg string, fields ...Field) {
 	if l.level <= FATAL {
 		l.log("FATAL", msg, fields...)
-		os.Exit(1)
+		ExitFunc(1)
 	}
 }
 

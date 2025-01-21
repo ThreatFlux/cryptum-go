@@ -1,24 +1,48 @@
 # Cryptum-Go
 
-A Go implementation of the Cryptum encryption framework, providing secure hybrid encryption capabilities using RSA and AES. This project is compatible with the Python cryptum library while leveraging Go's strong cryptographic primitives.
+[![Tests](https://github.com/threatflux/cryptum-go/actions/workflows/test.yml/badge.svg)](https://github.com/threatflux/cryptum-go/actions/workflows/test.yml)
+[![Release](https://github.com/threatflux/cryptum-go/actions/workflows/release.yml/badge.svg)](https://github.com/threatflux/cryptum-go/actions/workflows/release.yml)
+[![codecov](https://codecov.io/gh/threatflux/cryptum-go/branch/main/graph/badge.svg)](https://codecov.io/gh/threatflux/cryptum-go)
+[![Go Report Card](https://goreportcard.com/badge/github.com/threatflux/cryptum-go)](https://goreportcard.com/report/github.com/threatflux/cryptum-go)
+[![GoDoc](https://godoc.org/github.com/threatflux/cryptum-go?status.svg)](https://godoc.org/github.com/threatflux/cryptum-go)
+
+A robust Go implementation of the Cryptum encryption framework, providing secure hybrid encryption capabilities using RSA and AES. This project maintains compatibility with the Python cryptum library while leveraging Go's strong cryptographic primitives.
 
 ## Features
 
-- RSA key pair generation (4096-bit)
-- Hybrid encryption using RSA+AES
-- AES-GCM for authenticated encryption
-- Base64 encoding for data transport
-- Command-line interface
-- Compatible with Python cryptum library
+- **Strong Encryption**
+  - RSA key pair generation (4096-bit)
+  - Hybrid encryption using RSA+AES
+  - AES-GCM for authenticated encryption
+  - Secure random number generation
+  - OAEP padding with SHA-512 for RSA operations
+
+- **Usability**
+  - Command-line interface
+  - Library API for Go applications
+  - Base64 encoding for data transport
+  - Cross-language compatibility with Python cryptum
+
+- **Quality Assurance**
+  - 90%+ test coverage
+  - Continuous integration
+  - Automated releases
+  - Docker support
 
 ## Installation
 
+### Using Go Install
 ```bash
 go install github.com/threatflux/cryptum-go/cmd/cryptum@latest
 ```
 
-Or clone and build from source:
+### Using Docker
+```bash
+docker pull threatflux/cryptum:latest
+docker run -it threatflux/cryptum:latest cryptum -help
+```
 
+### Building from Source
 ```bash
 git clone https://github.com/threatflux/cryptum-go.git
 cd cryptum-go
@@ -98,31 +122,45 @@ func main() {
 }
 ```
 
-## Cross-Language Compatibility
+## Security Considerations
 
-This library maintains compatibility with the Python cryptum library. Encrypted data from either library can be decrypted by the other, ensuring seamless integration in mixed-language environments.
-
-## Security
-
-- Uses 4096-bit RSA keys
-- Implements AES-256-GCM for authenticated encryption
-- Secure random number generation
-- OAEP padding with SHA-512 for RSA operations
+- Uses industry-standard cryptographic algorithms
+- Regular security updates and dependency maintenance
+- No known vulnerabilities
+- Follows cryptographic best practices
 
 ## Development
 
-Requirements:
+### Requirements
 - Go 1.23.5 or higher
+- Docker (optional)
 - Make (optional)
 
-Running tests:
+### Testing
 ```bash
-go test ./...
+# Run all tests with coverage
+go test -v -cover ./...
+
+# Run specific test
+go test -v ./cmd/cryptum -run TestHandleEncrypt
+
+# Run tests with race detection
+go test -v -race ./...
 ```
 
-## License
+### Code Quality
+- Maintains 90%+ test coverage
+- Uses Go best practices
+- Follows standard Go project layout
+- Includes comprehensive documentation
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+## CI/CD Pipeline
+
+- Automated tests on pull requests
+- Code coverage reporting
+- Automated releases on main branch
+- Multi-platform binary builds
+- Docker image publishing
 
 ## Contributing
 
@@ -131,3 +169,19 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 3. Commit your changes (`git commit -m 'Add some amazing feature'`)
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
+
+### Pull Request Requirements
+- Must pass all tests
+- Must maintain 90% code coverage
+- Must include documentation updates
+- Must follow Go best practices
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## Support
+
+- [Open an issue](https://github.com/threatflux/cryptum-go/issues/new)
+- [Read the documentation](https://godoc.org/github.com/threatflux/cryptum-go)
+- [View the changelog](CHANGELOG.md)

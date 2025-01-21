@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/base64"
 	"flag"
 	"fmt"
 	"io"
@@ -12,7 +11,8 @@ import (
 )
 
 var (
-	log = logger.GetInstance()
+	log      = logger.GetInstance()
+	exitFunc = os.Exit // Can be overridden in tests
 )
 
 func main() {
@@ -28,20 +28,25 @@ func main() {
 
 	flag.Parse()
 
+	runCryptum(*generateCmd, *encryptCmd, *decryptCmd, *publicKeyFile, *privateKeyFile, *inputFile, *outputFile, *debug)
+}
+
+func runCryptum(generateCmd, encryptCmd, decryptCmd bool, publicKeyFile, privateKeyFile, inputFile, outputFile string, debug bool) {
+
 	// Set log level
-	if *debug {
+	if debug {
 		log.SetLevel(logger.DEBUG)
 	}
 
 	// Validate command
 	cmdCount := 0
-	if *generateCmd {
+	if generateCmd {
 		cmdCount++
 	}
-	if *encryptCmd {
+	if encryptCmd {
 		cmdCount++
 	}
-	if *decryptCmd {
+	if decryptCmd {
 		cmdCount++
 	}
 	if cmdCount != 1 {
@@ -50,18 +55,18 @@ func main() {
 
 	// Execute command
 	switch {
-	case *generateCmd:
-		handleGenerate(*outputFile)
-	case *encryptCmd:
-		if *publicKeyFile == "" {
+	case generateCmd:
+		handleGenerate(outputFile)
+	case encryptCmd:
+		if publicKeyFile == "" {
 			log.Fatal("Public key file is required for encryption")
 		}
-		handleEncrypt(*publicKeyFile, *inputFile, *outputFile)
-	case *decryptCmd:
-		if *privateKeyFile == "" {
+		handleEncrypt(publicKeyFile, inputFile, outputFile)
+	case decryptCmd:
+		if privateKeyFile == "" {
 			log.Fatal("Private key file is required for decryption")
 		}
-		handleDecrypt(*privateKeyFile, *inputFile, *outputFile)
+		handleDecrypt(privateKeyFile, inputFile, outputFile)
 	}
 }
 
@@ -120,11 +125,8 @@ func handleEncrypt(publicKeyFile, inputFile, outputFile string) {
 		log.Fatal("Encryption failed", logger.StringField("error", err.Error()))
 	}
 
-	// Encode to base64
-	encoded := base64.URLEncoding.EncodeToString(encrypted)
-
 	// Write output
-	err = writeOutput(outputFile, []byte(encoded))
+	err = writeOutput(outputFile, encrypted)
 	if err != nil {
 		log.Fatal("Failed to write output", logger.StringField("error", err.Error()))
 	}
@@ -150,14 +152,8 @@ func handleDecrypt(privateKeyFile, inputFile, outputFile string) {
 		log.Fatal("Failed to read input", logger.StringField("error", err.Error()))
 	}
 
-	// Decode from base64
-	decoded, err := base64.URLEncoding.DecodeString(string(data))
-	if err != nil {
-		log.Fatal("Failed to decode base64 input", logger.StringField("error", err.Error()))
-	}
-
 	// Decrypt data
-	decrypted, err := encryption.DecryptBlob(decoded, privKey)
+	decrypted, err := encryption.DecryptBlob(data, privKey)
 	if err != nil {
 		log.Fatal("Decryption failed", logger.StringField("error", err.Error()))
 	}

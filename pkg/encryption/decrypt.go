@@ -19,6 +19,9 @@ var (
 // The data format must match the Python cryptum library:
 // [encrypted_session_key(512)][nonce(12)][ciphertext][tag(16)]
 func DecryptBlob(encryptedData []byte, privateKey *rsa.PrivateKey) ([]byte, error) {
+	if privateKey == nil {
+		return nil, errors.New("private key is required")
+	}
 	if len(encryptedData) < 512+12+16 { // Minimum length check
 		return nil, ErrInvalidData
 	}
