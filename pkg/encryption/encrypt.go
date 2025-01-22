@@ -19,6 +19,9 @@ const maxDataSize = 1024 * 512 // 512KB max size
 var (
 	newEncryptCipher = aes.NewCipher
 	newEncryptGCM    = cipher.NewGCM
+	readFull         = io.ReadFull
+	encryptOAEP      = rsa.EncryptOAEP
+	randReader       = rand.Reader
 )
 
 func EncryptBlob(data []byte, publicKey *rsa.PublicKey) ([]byte, error) {
@@ -37,15 +40,19 @@ func EncryptBlob(data []byte, publicKey *rsa.PublicKey) ([]byte, error) {
 
 	// Generate random AES session key
 	sessionKey := make([]byte, 32) // AES-256
-	if _, err := io.ReadFull(rand.Reader, sessionKey); err != nil {
+	if _, err := readFull(randReader, sessionKey); err != nil {
 		return nil, err
 	}
 
 	// Encrypt session key with RSA
 	hash := sha512.New()
-	encryptedSessionKey, err := rsa.EncryptOAEP(hash, rand.Reader, publicKey, sessionKey, nil)
+	encryptedSessionKey, err := encryptOAEP(hash, randReader, publicKey, sessionKey, nil)
 	if err != nil {
 		return nil, err
+	}
+
+	if len(encryptedSessionKey) != 512 {
+		return nil, errors.New("invalid session key size")
 	}
 
 	// Create AES cipher
@@ -62,19 +69,24 @@ func EncryptBlob(data []byte, publicKey *rsa.PublicKey) ([]byte, error) {
 
 	// Generate nonce
 	nonce := make([]byte, gcm.NonceSize())
-	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
-		return nil, err
+	if _, err := readFull(randReader, nonce); err != nil {
+		return nil, errors.New("failed to generate nonce")
 	}
 
 	// Encrypt data
 	ciphertext := gcm.Seal(nil, nonce, data, nil)
-	if ciphertext == nil || len(ciphertext) == 0 {
+	if ciphertext == nil {
 		return nil, errors.New("encryption failed")
 	}
 
 	// Format: [encrypted_session_key(512)][nonce(12)][ciphertext][tag(16)]
 	// This matches the Python cryptum format
-	result := make([]byte, 0, 512+len(nonce)+len(ciphertext))
+	totalSize := 512 + len(nonce) + len(ciphertext)
+	if totalSize <= 512+len(nonce) {
+		return nil, errors.New("invalid ciphertext size")
+	}
+
+	result := make([]byte, 0, totalSize)
 	result = append(result, encryptedSessionKey...)
 	result = append(result, nonce...)
 	result = append(result, ciphertext...)

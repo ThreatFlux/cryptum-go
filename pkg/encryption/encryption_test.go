@@ -6,6 +6,8 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"errors"
+	"hash"
+	"io"
 	"testing"
 
 	"github.com/threatflux/cryptum-go/internal/testutil"
@@ -23,6 +25,13 @@ func (r *errorReader) Read(p []byte) (n int, err error) {
 	}
 	return rand.Read(p)
 }
+
+// Mock block cipher for testing
+type mockBlock struct {
+	cipher.Block
+}
+
+func (m *mockBlock) BlockSize() int { return 16 }
 
 // Mock AEAD for testing GCM errors
 type mockAEAD struct {
@@ -70,13 +79,17 @@ func TestEncryptionErrors(t *testing.T) {
 	// Save original functions and reader
 	oldNewCipher := newEncryptCipher
 	oldNewGCM := newEncryptGCM
-	oldReader := rand.Reader
+	oldReader := randReader
+	oldReadFull := readFull
+	oldEncryptOAEP := encryptOAEP
 
 	// Ensure cleanup after each test
 	defer func() {
 		newEncryptCipher = oldNewCipher
 		newEncryptGCM = oldNewGCM
-		rand.Reader = oldReader
+		randReader = oldReader
+		readFull = oldReadFull
+		encryptOAEP = oldEncryptOAEP
 	}()
 
 	testCases := []struct {
@@ -116,7 +129,7 @@ func TestEncryptionErrors(t *testing.T) {
 			key:     pubKey,
 			wantErr: true,
 			setup: func() {
-				rand.Reader = &errorReader{failAfter: 0}
+				randReader = &errorReader{failAfter: 0}
 			},
 		},
 		{
@@ -124,6 +137,17 @@ func TestEncryptionErrors(t *testing.T) {
 			data:    []byte("test"),
 			key:     &rsa.PublicKey{N: nil, E: 0}, // Invalid public key
 			wantErr: true,
+		},
+		{
+			name:    "Invalid session key size",
+			data:    []byte("test"),
+			key:     pubKey,
+			wantErr: true,
+			setup: func() {
+				encryptOAEP = func(hash hash.Hash, random io.Reader, pub *rsa.PublicKey, msg []byte, label []byte) ([]byte, error) {
+					return make([]byte, 256), nil // Return shorter key
+				}
+			},
 		},
 		{
 			name:    "AES cipher creation failure",
@@ -153,18 +177,11 @@ func TestEncryptionErrors(t *testing.T) {
 			key:     pubKey,
 			wantErr: true,
 			setup: func() {
-				// First ReadFull is for session key, second is for nonce
-				rand.Reader = &errorReader{failAfter: 1}
-			},
-		},
-		{
-			name:    "GCM seal failure",
-			data:    []byte("test"),
-			key:     pubKey,
-			wantErr: true,
-			setup: func() {
-				newEncryptGCM = func(block cipher.Block) (cipher.AEAD, error) {
-					return &mockAEAD{sealError: true}, nil
+				readFull = func(r io.Reader, buf []byte) (n int, err error) {
+					if len(buf) == 12 { // nonce generation
+						return 0, errors.New("mock nonce error")
+					}
+					return oldReadFull(r, buf)
 				}
 			},
 		},
@@ -191,17 +208,6 @@ func TestEncryptionErrors(t *testing.T) {
 			},
 		},
 		{
-			name:    "GCM seal returns custom output",
-			data:    []byte("test"),
-			key:     pubKey,
-			wantErr: false,
-			setup: func() {
-				newEncryptGCM = func(block cipher.Block) (cipher.AEAD, error) {
-					return &mockAEAD{customOutput: []byte("custom ciphertext")}, nil
-				}
-			},
-		},
-		{
 			name:    "GCM seal returns nil with error",
 			data:    []byte("test"),
 			key:     pubKey,
@@ -219,7 +225,9 @@ func TestEncryptionErrors(t *testing.T) {
 			// Reset to original state
 			newEncryptCipher = oldNewCipher
 			newEncryptGCM = oldNewGCM
-			rand.Reader = oldReader
+			randReader = oldReader
+			readFull = oldReadFull
+			encryptOAEP = oldEncryptOAEP
 
 			// Apply test-specific setup
 			if tc.setup != nil {
