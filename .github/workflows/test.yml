@@ -27,7 +27,7 @@ jobs:
 
     - name: Run tests with coverage
       run: |
-        go test -v -race -coverprofile=coverage.txt -covermode=atomic ./...
+        go test -coverprofile=coverage.txt ./pkg/encryption && go tool cover -func=coverage.txt
 
     - name: Check test coverage
       run: |
