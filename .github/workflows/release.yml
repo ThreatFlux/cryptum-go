@@ -10,13 +10,23 @@ jobs:
     runs-on: ubuntu-latest
     if: ${{ !contains(github.event.head_commit.message, 'skip ci') }}
     steps:
-      - name: Wait for tests to succeed
+      - name: Wait for unit tests
         uses: lewagon/wait-on-check-action@v1.3.1
         with:
           ref: ${{ github.ref }}
-          check-name: 'Run Tests'
+          check-name: 'Unit Tests'
           repo-token: ${{ secrets.GITHUB_TOKEN }}
           wait-interval: 10
+          allowed-conclusions: success,skipped
+
+      - name: Wait for E2E tests
+        uses: lewagon/wait-on-check-action@v1.3.1
+        with:
+          ref: ${{ github.ref }}
+          check-name: 'E2E Tests (Windows)'
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          wait-interval: 10
+          allowed-conclusions: success,skipped
 
   release:
     name: Create Release

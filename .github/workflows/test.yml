@@ -7,8 +7,8 @@ on:
     branches: [ main ]
 
 jobs:
-  test:
-    name: Run Tests
+  unit-tests:
+    name: Unit Tests
     runs-on: ubuntu-latest
     
     steps:
@@ -19,7 +19,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v4
       with:
-        go-version: '1.23.5'
+        go-version: '1.21'
         cache: true
 
     - name: Install dependencies
@@ -27,7 +27,7 @@ jobs:
 
     - name: Run tests with coverage
       run: |
-        go test -coverprofile=coverage.txt ./pkg/encryption && go tool cover -func=coverage.txt
+        go test -v -race -coverprofile=coverage.txt -covermode=atomic ./...
 
     - name: Check test coverage
       run: |
@@ -51,3 +51,39 @@ jobs:
         name: codecov-umbrella
         fail_ci_if_error: true
         token: ${{ secrets.CODECOV_TOKEN }}
+
+  e2e-windows:
+    name: E2E Tests (Windows)
+    needs: unit-tests
+    runs-on: windows-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.21'
+        cache: true
+
+    - name: Install dependencies
+      run: go mod tidy
+
+    - name: Build CLI
+      run: |
+        go build -o cryptum.exe ./cmd/cryptum
+        echo "${{ github.workspace }}" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+    - name: Verify CLI Installation
+      run: |
+        cryptum.exe -help
+        if ($LASTEXITCODE -ne 0) {
+          Write-Error "Failed to run cryptum.exe"
+          exit 1
+        }
+
+    - name: Run E2E Tests
+      run: |
+        go test -v ./tests/e2e/...
+      env:
+        CRYPTUM_BIN: cryptum.exe
