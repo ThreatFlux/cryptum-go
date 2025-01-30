@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [20250130.release.1] - 2025-01-30
+
 ### Added
 - Automated test workflow with code coverage reporting
 - Integration with Codecov
@@ -36,4 +38,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Base64 encoding for data transport
 
 [Unreleased]: https://github.com/threatflux/cryptum-go/compare/v1.0.0...HEAD
-[1.0.0]: https://github.com/threatflux/cryptum-go/releases/tag/v1.0.0
+[1.0.0]: https://github.com/threatflux/cryptum-go/releases/tag/v1.0.0[20250130.release.1]: https://github.com/threatflux/cryptum-go/releases/tag/20250130.release.1
