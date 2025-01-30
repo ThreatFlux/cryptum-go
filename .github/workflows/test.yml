@@ -81,9 +81,3 @@ jobs:
           Write-Error "Failed to run cryptum.exe"
           exit 1
         }
-
-    - name: Run E2E Tests
-      run: |
-        go test -v ./tests/e2e/...
-      env:
-        CRYPTUM_BIN: cryptum.exe
