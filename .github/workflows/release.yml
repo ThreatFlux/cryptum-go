@@ -10,120 +10,120 @@ jobs:
     runs-on: ubuntu-latest
     if: ${{ !contains(github.event.head_commit.message, 'skip ci') }}
     steps:
-    - name: Wait for unit tests
-      uses: lewagon/wait-on-check-action@v1.3.1
-      with:
-        ref: ${{ github.ref }}
-        check-name: 'Unit Tests'  # This matches
-        repo-token: ${{ secrets.GITHUB_TOKEN }}
-        wait-interval: 10
-        allowed-conclusions: success,skipped
+      - name: Wait for unit tests
+        uses: lewagon/wait-on-check-action@36b5c7f6797486f4c21188251d444f480d47ae13
+        with:
+          ref: ${{ github.ref }}
+          check-name: 'Unit Tests'
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          wait-interval: 10
+          allowed-conclusions: success,skipped
 
-    - name: Wait for E2E tests
-      uses: lewagon/wait-on-check-action@v1.3.1
-      with:
-        ref: ${{ github.ref }}
-        check-name: 'E2E Tests (Windows)'  # This matches
-        repo-token: ${{ secrets.GITHUB_TOKEN }}
-        wait-interval: 10
-        allowed-conclusions: success,skipped
+      - name: Wait for E2E tests
+        uses: lewagon/wait-on-check-action@36b5c7f6797486f4c21188251d444f480d47ae13
+        with:
+          ref: ${{ github.ref }}
+          check-name: 'E2E Tests (Windows)'
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          wait-interval: 10
+          allowed-conclusions: success,skipped
 
   release:
     name: Create Release
     needs: wait-for-tests
     runs-on: ubuntu-latest
-    
+
     steps:
-    - uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
+        with:
+          fetch-depth: 0
 
-    - name: Set up Go
-      uses: actions/setup-go@v4
-      with:
-        go-version: '1.23.5'
-        cache: true
+      - name: Set up Go
+        uses: actions/setup-go@93397bea11091df50f3d7e59dc26a7711a8bcfbe # v4
+        with:
+          go-version: '1.21'
+          cache: true
 
-    - name: Generate version
-      id: version
-      run: |
-        DATE=$(date '+%Y%m%d')
-        LAST_TAG=$(git tag --list "${DATE}.*" --sort=-version:refname | head -n 1)
-        
-        if [ -z "$LAST_TAG" ]; then
-          # First release of the day
-          VERSION="${DATE}.release.1"
-        else
-          # Increment patch number
-          PATCH=$(echo $LAST_TAG | awk -F. '{print $NF}')
-          NEXT_PATCH=$((PATCH + 1))
-          VERSION="${DATE}.release.${NEXT_PATCH}"
-        fi
-        
-        echo "version=$VERSION" >> $GITHUB_OUTPUT
-        echo "Version will be: $VERSION"
-
-    - name: Update CHANGELOG
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      run: |
-        VERSION=${{ steps.version.outputs.version }}
-        sed -i "s/## \[Unreleased\]/## [Unreleased]\n\n## [$VERSION] - $(date '+%Y-%m-%d')/" CHANGELOG.md
-        echo "[${VERSION}]: https://github.com/threatflux/cryptum-go/releases/tag/${VERSION}" >> CHANGELOG.md
-        git config --local user.email "action@github.com"
-        git config --local user.name "GitHub Action"
-        git add CHANGELOG.md
-        git commit -m "Update CHANGELOG for release ${VERSION}"
-        git push
-
-    - name: Build
-      run: |
-        GOOS=linux GOARCH=amd64 go build -o cryptum-linux-amd64 ./cmd/cryptum
-        GOOS=darwin GOARCH=amd64 go build -o cryptum-darwin-amd64 ./cmd/cryptum
-        GOOS=windows GOARCH=amd64 go build -o cryptum-windows-amd64.exe ./cmd/cryptum
-
-    - name: Log in to Docker Hub
-      uses: docker/login-action@v3
-      with:
-        username: ${{ secrets.DOCKERHUB_USERNAME }}
-        password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-    - name: Build and push Docker image
-      env:
-        DOCKER_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-        DOCKER_PASSWORD: ${{ secrets.DOCKERHUB_TOKEN }}
-      run: |
-        VERSION=${{ steps.version.outputs.version }}
-        docker build -t threatflux/cryptum:$VERSION .
-        docker tag threatflux/cryptum:$VERSION threatflux/cryptum:latest
-        docker push threatflux/cryptum:$VERSION
-        docker push threatflux/cryptum:latest
-
-    - name: Create Release
-      id: create_release
-      uses: actions/create-release@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        tag_name: ${{ steps.version.outputs.version }}
-        release_name: Release ${{ steps.version.outputs.version }}
-        body: |
-          Release ${{ steps.version.outputs.version }}
+      - name: Generate version
+        id: version
+        run: |
+          DATE=$(date '+%Y%m%d')
+          LAST_TAG=$(git tag --list "${DATE}.*" --sort=-version:refname | head -n 1)
           
-          ## Changes
-          ${{ github.event.head_commit.message }}
+          if [ -z "$LAST_TAG" ]; then
+            # First release of the day
+            VERSION="${DATE}.release.1"
+          else
+            # Increment patch number
+            PATCH=$(echo $LAST_TAG | awk -F. '{print $NF}')
+            NEXT_PATCH=$((PATCH + 1))
+            VERSION="${DATE}.release.${NEXT_PATCH}"
+          fi
           
-          For full details, see the [CHANGELOG](CHANGELOG.md)
-        draft: false
-        prerelease: false
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Version will be: $VERSION"
 
-    - name: Upload Release Assets
-      uses: softprops/action-gh-release@v1
-      with:
-        files: |
-          cryptum-linux-amd64
-          cryptum-darwin-amd64
-          cryptum-windows-amd64.exe
-        tag_name: ${{ steps.version.outputs.version }}
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Update CHANGELOG
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION=${{ steps.version.outputs.version }}
+          sed -i "s/## \[Unreleased\]/## [Unreleased]\n\n## [$VERSION] - $(date '+%Y-%m-%d')/" CHANGELOG.md
+          echo "[${VERSION}]: https://github.com/threatflux/cryptum-go/releases/tag/${VERSION}" >> CHANGELOG.md
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add CHANGELOG.md
+          git commit -m "Update CHANGELOG for release ${VERSION}"
+          git push
+
+      - name: Build
+        run: |
+          GOOS=linux GOARCH=amd64 go build -o cryptum-linux-amd64 ./cmd/cryptum
+          GOOS=darwin GOARCH=amd64 go build -o cryptum-darwin-amd64 ./cmd/cryptum
+          GOOS=windows GOARCH=amd64 go build -o cryptum-windows-amd64.exe ./cmd/cryptum
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@465a07811f14bebb1938fbed4728c6a1ff8901fc # v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push Docker image
+        env:
+          DOCKER_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKER_PASSWORD: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          VERSION=${{ steps.version.outputs.version }}
+          docker build -t threatflux/cryptum:$VERSION .
+          docker tag threatflux/cryptum:$VERSION threatflux/cryptum:latest
+          docker push threatflux/cryptum:$VERSION
+          docker push threatflux/cryptum:latest
+
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@0cb9c9b65d5d1901c1f53e5e66eaf4afd303e70e # v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ steps.version.outputs.version }}
+          release_name: Release ${{ steps.version.outputs.version }}
+          body: |
+            Release ${{ steps.version.outputs.version }}
+            
+            ## Changes
+            ${{ github.event.head_commit.message }}
+            
+            For full details, see the [CHANGELOG](CHANGELOG.md)
+          draft: false
+          prerelease: false
+
+      - name: Upload Release Assets
+        uses: softprops/action-gh-release@de2c0eb89ae2a093876385947365aca7b0e5f844 # v0.1.15
+        with:
+          files: |
+            cryptum-linux-amd64
+            cryptum-darwin-amd64
+            cryptum-windows-amd64.exe
+          tag_name: ${{ steps.version.outputs.version }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
