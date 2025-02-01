@@ -10,23 +10,23 @@ jobs:
     runs-on: ubuntu-latest
     if: ${{ !contains(github.event.head_commit.message, 'skip ci') }}
     steps:
-      - name: Wait for unit tests
-        uses: lewagon/wait-on-check-action@v1.3.1
-        with:
-          ref: ${{ github.ref }}
-          check-name: 'Unit Tests'
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
-          wait-interval: 10
-          allowed-conclusions: success,skipped
+    - name: Wait for unit tests
+      uses: lewagon/wait-on-check-action@v1.3.1
+      with:
+        ref: ${{ github.ref }}
+        check-name: 'Unit Tests'  # This matches
+        repo-token: ${{ secrets.GITHUB_TOKEN }}
+        wait-interval: 10
+        allowed-conclusions: success,skipped
 
-      - name: Wait for E2E tests
-        uses: lewagon/wait-on-check-action@v1.3.1
-        with:
-          ref: ${{ github.ref }}
-          check-name: 'E2E Tests (Windows)'
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
-          wait-interval: 10
-          allowed-conclusions: success,skipped
+    - name: Wait for E2E tests
+      uses: lewagon/wait-on-check-action@v1.3.1
+      with:
+        ref: ${{ github.ref }}
+        check-name: 'E2E Tests (Windows)'  # This matches
+        repo-token: ${{ secrets.GITHUB_TOKEN }}
+        wait-interval: 10
+        allowed-conclusions: success,skipped
 
   release:
     name: Create Release
@@ -82,12 +82,12 @@ jobs:
         GOOS=darwin GOARCH=amd64 go build -o cryptum-darwin-amd64 ./cmd/cryptum
         GOOS=windows GOARCH=amd64 go build -o cryptum-windows-amd64.exe ./cmd/cryptum
 
-    - name: Login to DockerHub
-      if: github.event_name != 'pull_request'
+    - name: Log in to Docker Hub
       uses: docker/login-action@v3
       with:
         username: ${{ secrets.DOCKERHUB_USERNAME }}
         password: ${{ secrets.DOCKERHUB_TOKEN }}
+
     - name: Build and push Docker image
       env:
         DOCKER_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
