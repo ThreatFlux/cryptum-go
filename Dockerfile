@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.4
 # Build stage
-FROM threatflux/go-builder:latest AS builder
+FROM threatflux/go-builder:main AS builder
 
 # Build arguments for version information
 ARG VERSION
