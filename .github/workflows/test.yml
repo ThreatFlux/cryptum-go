@@ -82,3 +82,4 @@ jobs:
             exit 1
           }
           cryptum.exe -generate -output keys
+          cryptum.exe -encrypt -public-key keys.public -input plaintext.txt -output encrypted.txt
