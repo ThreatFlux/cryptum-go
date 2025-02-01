@@ -81,3 +81,4 @@ jobs:
             Write-Error "Failed to run cryptum.exe"
             exit 1
           }
+          cryptum.exe -generate -output keys
