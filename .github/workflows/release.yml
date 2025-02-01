@@ -11,7 +11,7 @@ jobs:
     if: ${{ !contains(github.event.head_commit.message, 'skip ci') }}
     steps:
       - name: Wait for unit tests
-        uses: lewagon/wait-on-check-action@36b5c7f6797486f4c21188251d444f480d47ae13
+        uses: lewagon/wait-on-check-action@e106e5c43e8ca1edea6383a39a01c5ca495fd812 # v1.3.1
         with:
           ref: ${{ github.ref }}
           check-name: 'Unit Tests'
@@ -20,7 +20,7 @@ jobs:
           allowed-conclusions: success,skipped
 
       - name: Wait for E2E tests
-        uses: lewagon/wait-on-check-action@36b5c7f6797486f4c21188251d444f480d47ae13
+        uses: lewagon/wait-on-check-action@e106e5c43e8ca1edea6383a39a01c5ca495fd812 # v1.3.1
         with:
           ref: ${{ github.ref }}
           check-name: 'E2E Tests (Windows)'
@@ -34,14 +34,14 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
         with:
           fetch-depth: 0
 
       - name: Set up Go
         uses: actions/setup-go@93397bea11091df50f3d7e59dc26a7711a8bcfbe # v4
         with:
-          go-version: '1.21'
+          go-version: '1.23.5'
           cache: true
 
       - name: Generate version
@@ -83,7 +83,7 @@ jobs:
           GOOS=windows GOARCH=amd64 go build -o cryptum-windows-amd64.exe ./cmd/cryptum
 
       - name: Log in to Docker Hub
-        uses: docker/login-action@465a07811f14bebb1938fbed4728c6a1ff8901fc # v3
+        uses: docker/login-action@9780b0c442fbb1117ed29e0efdff1e18412f7567 # v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
@@ -118,7 +118,7 @@ jobs:
           prerelease: false
 
       - name: Upload Release Assets
-        uses: softprops/action-gh-release@de2c0eb89ae2a093876385947365aca7b0e5f844 # v0.1.15
+        uses: softprops/action-gh-release@26994186c0ac3ef5cae75ac16aa32e8153525f77 # v1
         with:
           files: |
             cryptum-linux-amd64
