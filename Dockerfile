@@ -7,27 +7,30 @@ ARG VERSION
 ARG BUILD_DATE
 ARG GIT_COMMIT
 
+WORKDIR /build
+
 # Verify go mod integrity first
-COPY go.mod go.sum ./
+COPY go.mod ./
 RUN go mod verify
 
 # Copy source code
 COPY . .
 
 # Run security scan
-RUN go run golang.org/x/vuln/cmd/govulncheck ./...
+RUN go install golang.org/x/vuln/cmd/govulncheck@latest
+RUN govulncheck ./...
 
 # Build the binary with additional security flags
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
-    go build -trimpath \
+    go build -buildvcs=false -trimpath \
     -ldflags="-w -s \
     -X main.Version=${VERSION} \
     -X main.BuildDate=${BUILD_DATE} \
     -X main.GitCommit=${GIT_COMMIT}" \
-    -o /cryptum ./cmd/cryptum
+    -o cryptum ./cmd/cryptum
 
 # Verify binary
-RUN /cryptum --version || true
+RUN ./cryptum --version || true
 
 # Final stage - using specific Alpine version for security
 FROM alpine:3.21.2 AS final
@@ -63,8 +66,8 @@ RUN mkdir -p /data && \
     chown -R cryptum:cryptum /data && \
     chmod 755 /data
 
-# Copy the binary from builder
-COPY --from=builder --chown=cryptum:cryptum /cryptum /usr/local/bin/cryptum
+# Copy the binary from builder (in final stage)
+COPY --from=builder --chown=cryptum:cryptum /build/cryptum /usr/local/bin/cryptum
 
 # Set working directory
 WORKDIR /data
